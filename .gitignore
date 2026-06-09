@@ -27,6 +27,11 @@ dist/
 *passphrase*
 *.key
 
+# MyInfo v5 dev RP keys — generated at container startup by
+# `pnpm --filter formsg-backend gen-dev-rp-keys`. Private key material,
+# never checked in.
+.dev-keys/
+
 # VSCode
 # ==============
 .dccache

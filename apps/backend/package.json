@@ -7,6 +7,7 @@
     "build": "tsc -p tsconfig.build.json && pnpm copyfiles:backend",
     "copyfiles:backend": "copyfiles -u 1 src/**/*.html ./dist/src",
     "dev": "tsnd --poll --respawn --transpile-only --inspect=0.0.0.0 --exit-child -r dotenv/config -- src/app/server.ts",
+    "gen-dev-rp-keys": "tsx scripts/generate-dev-rp-keys.ts",
     "start": "node -r dotenv/config dist/src/app/server.js",
     "test:e2e-v2:server": "env-cmd -f ./__tests__/setup/.test-env pnpm test-e2e-server",
     "test-e2e-server": "concurrently --success last --kill-others \"pnpm exec mockpass\" \"pnpm exec maildev\" \"node dist/src/app/server.js\" \"node ./__tests__/setup/mock-webhook-server.js\"",

@@ -18,10 +18,8 @@
 import axios from 'axios'
 import crypto from 'crypto'
 import express from 'express'
-import fs from 'fs'
 import http from 'http'
 import * as jose from 'jose'
-import path from 'path'
 
 const ISSUER = process.env.SMOKE_ISSUER ?? 'http://localhost:5156/singpass/v2'
 const CLIENT_ID = process.env.SMOKE_CLIENT_ID ?? 'mockClientId'
@@ -29,16 +27,40 @@ const REDIRECT_URI =
   process.env.SMOKE_REDIRECT_URI ?? 'http://localhost:5000/api/v3/mi/v5/login'
 const JWKS_PORT = Number(process.env.SMOKE_JWKS_PORT ?? 5099)
 
-const FIXTURES_DIR = path.resolve(
-  __dirname,
-  '../src/app/modules/myinfo/v5/__fixtures__/keys',
-)
-const publicJwks = JSON.parse(
-  fs.readFileSync(path.join(FIXTURES_DIR, 'dev-rp-public.json'), 'utf8'),
-) as jose.JSONWebKeySet
-const privateJwks = JSON.parse(
-  fs.readFileSync(path.join(FIXTURES_DIR, 'dev-rp-secret.json'), 'utf8'),
-) as jose.JSONWebKeySet
+/**
+ * Generate a fresh EC P-256 RP keyset (sig + enc) for the smoke run. We
+ * deliberately do NOT load static fixture files — committing private key
+ * material, even labelled "dev", is a foot-gun and the smoke flow only
+ * needs the keypair to be self-consistent for one process lifetime.
+ */
+async function generateRpJwks(): Promise<{
+  publicJwks: jose.JSONWebKeySet
+  privateJwks: jose.JSONWebKeySet
+}> {
+  const sig = await jose.generateKeyPair('ES256', { extractable: true })
+  const enc = await jose.generateKeyPair('ECDH-ES+A256KW', {
+    crv: 'P-256',
+    extractable: true,
+  })
+  const sigPriv = await jose.exportJWK(sig.privateKey)
+  const sigPub = await jose.exportJWK(sig.publicKey)
+  const encPriv = await jose.exportJWK(enc.privateKey)
+  const encPub = await jose.exportJWK(enc.publicKey)
+  for (const k of [sigPriv, sigPub]) {
+    k.use = 'sig'
+    k.alg = 'ES256'
+    k.kid = 'smoke-rp-sig-1'
+  }
+  for (const k of [encPriv, encPub]) {
+    k.use = 'enc'
+    k.alg = 'ECDH-ES+A256KW'
+    k.kid = 'smoke-rp-enc-1'
+  }
+  return {
+    publicJwks: { keys: [sigPub, encPub] },
+    privateJwks: { keys: [sigPriv, encPriv] },
+  }
+}
 
 function base64url(buf: Buffer): string {
   return buf
@@ -55,7 +77,8 @@ function pickJwk(set: jose.JSONWebKeySet, use: 'sig' | 'enc'): jose.JWK {
 }
 
 async function main(): Promise<void> {
-  // 1. Publish RP JWKS for mockpass to fetch.
+  // 1. Generate a fresh RP keyset and publish its public half for mockpass.
+  const { publicJwks, privateJwks } = await generateRpJwks()
   const app = express()
   app.get('/jwks', (_req, res) => res.json(publicJwks))
   const server = http.createServer(app)

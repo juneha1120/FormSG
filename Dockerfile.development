@@ -58,5 +58,6 @@ EXPOSE 5000
 # tini is the init process that will adopt orphaned zombie processes
 # e.g. chromium when launched to create a new PDF
 ENTRYPOINT [ "tini", "--" ]
-# Create local AWS resources before building the app
-CMD sh init-localstack.sh && pnpm dev:backend
+# Create local AWS resources, generate dev-only MyInfo v5 RP keys (idempotent
+# — skips if already present in the mounted volume), then start the backend.
+CMD sh init-localstack.sh && pnpm --filter formsg-backend gen-dev-rp-keys && pnpm dev:backend
